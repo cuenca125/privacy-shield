@@ -1,0 +1,16 @@
+.claude/ 
+.idea/ 
+CLAUDE.md 
+SESSION_REPORT.md 
+prompt.md 
+replace_radar.ps1 
+gitignore 
+local.properties 
+.gradle/ 
+build/ 
+*.keystore 
+*.jks 
+*.apk 
+*.aab 
+.DS_Store 
+Thumbs.db
