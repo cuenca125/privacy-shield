@@ -35,7 +35,14 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.PrivacyShield"
         android:extractNativeLibs="true"
+        android:requestLegacyExternalStorage="false"
         tools:targetApi="31">
+        <property
+            android:name="android.window.PROPERTY_COMPAT_ALLOW_IGNORING_ORIENTATION_REQUEST_WHEN_LOOP_DETECTED"
+            android:value="false" />
+        <meta-data
+            android:name="com.android.dynamic.apk.fused.modules"
+            android:value="" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

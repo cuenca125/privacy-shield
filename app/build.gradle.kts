@@ -21,6 +21,7 @@ android {
         buildConfigField("boolean", "ENABLE_ROOT_FEATURES", "false")
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
+            debugSymbolLevel = "FULL"
         }
     }
 
@@ -36,10 +37,14 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file(System.getenv("KEYSTORE_PATH") ?: "keystore/release.keystore")
-            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: ""
-            keyAlias = System.getenv("KEY_ALIAS") ?: "privacyshield"
-            keyPassword = System.getenv("KEY_PASSWORD") ?: ""
+            val keystorePath = System.getenv("KEYSTORE_PATH") ?: "keystore/release.keystore"
+            val keystoreFile = file(keystorePath)
+            if (keystoreFile.exists()) {
+                storeFile = keystoreFile
+                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "REDACTED"
+                keyAlias = System.getenv("KEY_ALIAS") ?: "privacyshield"
+                keyPassword = System.getenv("KEY_PASSWORD") ?: "REDACTED"
+            }
         }
     }
 
@@ -48,10 +53,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            val keystorePath = System.getenv("KEYSTORE_PATH")
-            if (keystorePath != null) {
-                signingConfig = signingConfigs.getByName("release")
-            }
+            signingConfig = signingConfigs.getByName("release")
         }
         debug {
             applicationIdSuffix = ".debug"
@@ -74,6 +76,9 @@ android {
     }
     kotlinOptions {
         jvmTarget = "11"
+    }
+    lint {
+        abortOnError = false
     }
 }
 

@@ -174,8 +174,8 @@ app/src/main/assets/
 
 ## Author
 
-**Juan** — [@cuenca125](https://github.com/cuenca125)  
-Cybersecurity enthusiast · CompTIA Security+ candidate · Manises, Valencia, ES
+**Juan** — [@blank-0x](https://github.com/blank-0x)  
+Cybersecurity enthusiast · CompTIA Security+ candidate
 
 ---
 
