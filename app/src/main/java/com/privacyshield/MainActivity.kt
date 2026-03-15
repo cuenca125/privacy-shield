@@ -33,11 +33,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
@@ -463,8 +466,8 @@ class MainActivity : ComponentActivity() {
     @Composable
     fun BottomNavigationBar() {
         val bgColor = if (currentTheme == AppTheme.DARK) Color(0xFF0A0A0A) else Color.White
-        val selectedColor = if (currentTheme == AppTheme.DARK) Color.White else Color.Black
-        val unselectedColor = if (currentTheme == AppTheme.DARK) Color(0xFF666666) else Color(0xFF888888)
+        val selectedColor = if (currentTheme == AppTheme.DARK) Color.White else MaterialTheme.colorScheme.primary
+        val unselectedColor = if (currentTheme == AppTheme.DARK) Color(0xFF666666) else MaterialTheme.colorScheme.onSurfaceVariant
 
         // Pulse animation for Tools icon — declared unconditionally (rules of hooks)
         val infiniteTransition = rememberInfiniteTransition(label = "toolsPulse")
@@ -481,7 +484,21 @@ class MainActivity : ComponentActivity() {
 
         NavigationBar(
             containerColor = bgColor,
-            modifier = Modifier.navigationBarsPadding()
+            modifier = Modifier
+                .navigationBarsPadding()
+                .then(
+                    if (currentTheme == AppTheme.LIGHT)
+                        Modifier.drawWithContent {
+                            drawContent()
+                            drawLine(
+                                color = androidx.compose.ui.graphics.Color(0xFFE0E0E0),
+                                start = androidx.compose.ui.geometry.Offset(0f, 0f),
+                                end = androidx.compose.ui.geometry.Offset(size.width, 0f),
+                                strokeWidth = 1.dp.toPx()
+                            )
+                        }
+                    else Modifier
+                )
         ) {
             listOf(
                 Triple(AppTab.HOME, Icons.Filled.Shield, "Home"),
@@ -718,24 +735,32 @@ class MainActivity : ComponentActivity() {
             ) {
                 Column {
                     Text("PRIVACY SHIELD", fontSize = 22.sp, fontWeight = FontWeight.Bold,
-                        color = textColor, letterSpacing = 2.sp)
-                    Text("Device Detection", fontSize = 11.sp, color = subtextColor, letterSpacing = 1.sp)
+                        color = MaterialTheme.colorScheme.onBackground, letterSpacing = 2.sp)
+                    Text("Device Detection", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     IconButton(
                         onClick = { showSettingsSheet = true },
                         modifier = Modifier.size(40.dp).clip(CircleShape).background(cardColor)
                     ) {
-                        Icon(Icons.Filled.Settings, "Settings", tint = textColor)
+                        Icon(Icons.Filled.Settings, "Settings", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 12.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                thickness = 0.5.dp
+            )
 
             // Privacy Score Card - expanded
             val scoreBorder = when {
-                privacyScore >= 80 -> androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF44FF88).copy(alpha = 0.3f))
+                privacyScore >= 80 -> androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (currentTheme == AppTheme.LIGHT) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                    else Color(0xFF44FF88).copy(alpha = 0.3f)
+                )
                 privacyScore < 50 -> androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF4444).copy(alpha = 0.3f))
                 else -> null
             }
@@ -753,7 +778,7 @@ class MainActivity : ComponentActivity() {
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("PRIVACY SCORE", fontSize = 12.sp, color = subtextColor, letterSpacing = 1.sp)
+                        Text("PRIVACY SCORE", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp)
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("$privacyScore", fontSize = 48.sp, fontWeight = FontWeight.Bold,
                                 color = getPrivacyScoreColor(privacyScore))
@@ -822,22 +847,22 @@ class MainActivity : ComponentActivity() {
             Spacer(modifier = Modifier.height(12.dp))
 
             // Quick Actions
-            Text("SCAN MODE", fontSize = 12.sp, color = subtextColor, letterSpacing = 1.sp,
+            Text("SCAN MODE", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp,
                 modifier = Modifier.padding(bottom = 8.dp))
 
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                item { QuickActionButton("Full Scan", Icons.Filled.Search, cardColor, textColor) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ScanModeButton("Full Scan", Icons.Filled.Search, currentScanMode == ScanMode.FULL) {
                     currentScanMode = ScanMode.FULL
                     requestPermissionsAndScan(ScanMode.FULL)
-                }}
-                item { QuickActionButton("Cameras", Icons.Filled.Videocam, cardColor, textColor) {
+                }
+                ScanModeButton("Cameras", Icons.Filled.Videocam, currentScanMode == ScanMode.CAMERAS_ONLY) {
                     currentScanMode = ScanMode.CAMERAS_ONLY
                     requestPermissionsAndScan(ScanMode.CAMERAS_ONLY)
-                }}
-                item { QuickActionButton("Mics", Icons.Filled.Mic, cardColor, textColor) {
+                }
+                ScanModeButton("Mics", Icons.Filled.Mic, currentScanMode == ScanMode.MICS_ONLY) {
                     currentScanMode = ScanMode.MICS_ONLY
                     requestPermissionsAndScan(ScanMode.MICS_ONLY)
-                }}
+                }
             }
 
             Spacer(modifier = Modifier.height(6.dp))
@@ -884,7 +909,7 @@ class MainActivity : ComponentActivity() {
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column {
-                        Text(devices.size.toString(), fontSize = 40.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text(devices.size.toString(), fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         Text("Total devices", fontSize = 13.sp, color = Color.White)
                     }
                     Icon(Icons.Filled.ArrowForwardIos, null, tint = Color.White, modifier = Modifier.size(16.dp))
@@ -910,7 +935,7 @@ class MainActivity : ComponentActivity() {
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column {
-                        Text(suspiciousDevices.size.toString(), fontSize = 40.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text(suspiciousDevices.size.toString(), fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         Text("Suspicious devices", fontSize = 13.sp, color = Color.White)
                     }
                     Icon(Icons.Filled.ArrowForwardIos, null, tint = Color.White, modifier = Modifier.size(16.dp))
@@ -936,7 +961,7 @@ class MainActivity : ComponentActivity() {
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column {
-                        Text((devices.size - suspiciousDevices.size).toString(), fontSize = 40.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text((devices.size - suspiciousDevices.size).toString(), fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         Text("Safe devices", fontSize = 13.sp, color = Color.White)
                     }
                     Icon(Icons.Filled.ArrowForwardIos, null, tint = Color.White, modifier = Modifier.size(16.dp))
@@ -1396,23 +1421,38 @@ class MainActivity : ComponentActivity() {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text("Contributing Devices", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = textColor)
                                 Spacer(modifier = Modifier.height(10.dp))
-                                suspiciousDevices.forEach { device ->
-                                    val impact = when {
-                                        device.type == DeviceType.CAMERA -> -15
-                                        device.type == DeviceType.MICROPHONE -> -10
-                                        device.isVeryClose() -> -5
-                                        else -> -5
+                                data class GroupedDeviceRow(val deviceType: DeviceType, val groupDevices: List<DetectedDevice>, val impact: Int)
+                                val grouped = suspiciousDevices
+                                    .groupBy { it.type }
+                                    .map { (dt, grp) ->
+                                        val totalImpact: Int = grp.fold(0) { acc, d ->
+                                            acc + when {
+                                                d.type == DeviceType.CAMERA -> -15
+                                                d.type == DeviceType.MICROPHONE -> -10
+                                                else -> -5
+                                            }
+                                        }
+                                        GroupedDeviceRow(dt, grp, totalImpact)
                                     }
+                                    .sortedBy { it.impact }
+                                grouped.forEach { row ->
+                                    val count = row.groupDevices.size
                                     Row(
                                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Column(modifier = Modifier.weight(1f)) {
-                                            Text(device.name, fontSize = 13.sp, color = textColor, fontWeight = FontWeight.Medium)
-                                            Text(device.type.displayName, fontSize = 11.sp, color = subtextColor)
+                                            Text(
+                                                if (count == 1) row.deviceType.displayName else "${count}x ${row.deviceType.displayName}",
+                                                fontSize = 13.sp, color = textColor, fontWeight = FontWeight.Medium
+                                            )
+                                            Text(
+                                                if (count == 1) row.groupDevices.first().macAddress else "$count devices",
+                                                fontSize = 11.sp, color = subtextColor
+                                            )
                                         }
-                                        Text("$impact pts", fontSize = 13.sp, color = Color(0xFFFF4444), fontWeight = FontWeight.Medium)
+                                        Text("${row.impact} pts", fontSize = 13.sp, color = Color(0xFFFF4444), fontWeight = FontWeight.Medium)
                                     }
                                 }
                             }
@@ -1560,7 +1600,7 @@ class MainActivity : ComponentActivity() {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("FILTERS", fontSize = 12.sp, color = subtextColor, letterSpacing = 1.sp)
+                Text("FILTERS", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     // Suspicious only toggle
                     IconButton(onClick = { searchSuspiciousOnly = !searchSuspiciousOnly; searchSafeOnly = false },
@@ -1911,7 +1951,7 @@ class MainActivity : ComponentActivity() {
                     elevation = CardDefaults.cardElevation(4.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("PORT SCANNER", fontSize = 12.sp, color = subtextColor, letterSpacing = 1.sp)
+                        Text("PORT SCANNER", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp)
                         Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(
                             value = targetIp,
@@ -2155,7 +2195,7 @@ class MainActivity : ComponentActivity() {
                     elevation = CardDefaults.cardElevation(4.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("PING", fontSize = 12.sp, color = subtextColor, letterSpacing = 1.sp)
+                        Text("PING", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp)
                         Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(
                             value = pingTarget,
@@ -2275,7 +2315,7 @@ class MainActivity : ComponentActivity() {
                         elevation = CardDefaults.cardElevation(4.dp)
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            Text("RECENT SCANS", fontSize = 12.sp, color = subtextColor, letterSpacing = 1.sp)
+                            Text("RECENT SCANS", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp)
                             Spacer(modifier = Modifier.height(8.dp))
                             portScanHistory.forEachIndexed { idx, result ->
                                 val isExpanded = expandedHistoryIndex == idx
@@ -2320,7 +2360,7 @@ class MainActivity : ComponentActivity() {
                     elevation = CardDefaults.cardElevation(4.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("WHOIS LOOKUP", fontSize = 12.sp, color = subtextColor, letterSpacing = 1.sp)
+                        Text("WHOIS LOOKUP", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp)
                         Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(
                             value = whoisTarget,
@@ -2436,7 +2476,7 @@ class MainActivity : ComponentActivity() {
                     elevation = CardDefaults.cardElevation(4.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("TRACEROUTE", fontSize = 12.sp, color = subtextColor, letterSpacing = 1.sp)
+                        Text("TRACEROUTE", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp)
                         Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(
                             value = traceTarget,
@@ -2581,7 +2621,7 @@ class MainActivity : ComponentActivity() {
                     elevation = CardDefaults.cardElevation(4.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("CVE LOOKUP", fontSize = 12.sp, color = subtextColor, letterSpacing = 1.sp)
+                        Text("CVE LOOKUP", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp)
                         Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(
                             value = cveLookupQuery,
@@ -2693,7 +2733,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("PYTHON SCANNER", fontSize = 12.sp, color = subtextColor, letterSpacing = 1.sp,
+                            Text("PYTHON SCANNER", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp,
                                 modifier = Modifier.weight(1f))
                             Surface(color = Color(0xFF44FF88).copy(alpha = 0.15f), shape = RoundedCornerShape(4.dp)) {
                                 Text("Chaquopy", fontSize = 10.sp, color = Color(0xFF44FF88),
@@ -3266,7 +3306,7 @@ class MainActivity : ComponentActivity() {
                         elevation = CardDefaults.cardElevation(4.dp)
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            Text("CONNECTED NETWORK", fontSize = 12.sp, color = subtextColor, letterSpacing = 1.sp)
+                            Text("CONNECTED NETWORK", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp)
                             Spacer(modifier = Modifier.height(8.dp))
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                 Column {
@@ -3313,7 +3353,7 @@ class MainActivity : ComponentActivity() {
                     elevation = CardDefaults.cardElevation(4.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("GATEWAY INFO", fontSize = 12.sp, color = subtextColor, letterSpacing = 1.sp)
+                        Text("GATEWAY INFO", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp)
                         Spacer(modifier = Modifier.height(12.dp))
                         if (gatewayIp.isEmpty() || gatewayIp == "0.0.0.0") {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -3363,7 +3403,7 @@ class MainActivity : ComponentActivity() {
                     elevation = CardDefaults.cardElevation(4.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("HOST DISCOVERY", fontSize = 12.sp, color = subtextColor, letterSpacing = 1.sp)
+                        Text("HOST DISCOVERY", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp)
                         Spacer(modifier = Modifier.height(8.dp))
                         if (gatewayIp.isNotEmpty() && gatewayIp != "0.0.0.0") {
                             OutlinedButton(
@@ -3545,7 +3585,7 @@ class MainActivity : ComponentActivity() {
                     elevation = CardDefaults.cardElevation(4.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("DNS LEAK CHECK", fontSize = 12.sp, color = subtextColor, letterSpacing = 1.sp)
+                        Text("DNS LEAK CHECK", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp)
                         Spacer(modifier = Modifier.height(8.dp))
                         Button(
                             onClick = {
@@ -3652,7 +3692,7 @@ class MainActivity : ComponentActivity() {
                         elevation = CardDefaults.cardElevation(4.dp)
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            Text("SECURITY ANALYSIS", fontSize = 12.sp, color = subtextColor, letterSpacing = 1.sp)
+                            Text("SECURITY ANALYSIS", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp)
                             Spacer(modifier = Modifier.height(8.dp))
                             securityChecks.forEach { check ->
                                 val (icon, iconColor) = when (check.level) {
@@ -3983,10 +4023,10 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun SecurityTab() {
-        val bgColor = if (currentTheme == AppTheme.DARK) Color(0xFF000000) else Color(0xFFF5F5F5)
-        val cardColor = if (currentTheme == AppTheme.DARK) Color(0xFF1A1A1A) else Color.White
-        val textColor = if (currentTheme == AppTheme.DARK) Color.White else Color.Black
-        val subtextColor = if (currentTheme == AppTheme.DARK) Color(0xFF666666) else Color(0xFF888888)
+        val bgColor = MaterialTheme.colorScheme.background
+        val cardColor = MaterialTheme.colorScheme.surface
+        val textColor = MaterialTheme.colorScheme.onSurface
+        val subtextColor = MaterialTheme.colorScheme.onSurfaceVariant
 
         // Compute security sub-scores
         var showWpaSheet by remember { mutableStateOf(false) }
@@ -4086,17 +4126,32 @@ class MainActivity : ComponentActivity() {
                             Text(feature.description, fontSize = 11.sp, color = subtextColor)
                         }
                         Spacer(modifier = Modifier.width(8.dp))
-                        Surface(
-                            color = if (rootAvailable) Color(0xFF1A3A2A) else Color(0xFF3A1A1A),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text(
-                                if (rootAvailable) "Available" else "Root Required",
-                                fontSize = 10.sp,
-                                color = if (rootAvailable) Color(0xFF44FF88) else Color(0xFFFF4444),
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
+                        if (rootAvailable) {
+                            Surface(
+                                color = Color(0xFF1A3A2A),
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text(
+                                    "Available",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF44FF88),
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
+                            }
+                        } else {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = Color.Transparent,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFB71C1C))
+                            ) {
+                                Text(
+                                    "Root Required",
+                                    color = if (currentTheme == AppTheme.DARK) Color(0xFFEF9A9A) else Color(0xFFB71C1C),
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -4150,15 +4205,16 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 Spacer(modifier = Modifier.height(12.dp))
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1A3A1A)),
-                    shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFF2E7D32),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Get Dev Build", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF44FF88))
+                        Text("Get Dev Build", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         Spacer(modifier = Modifier.height(4.dp))
                         Text("The dev build unlocks all root features. Available on GitHub or Gumroad.",
-                            fontSize = 12.sp, color = Color(0xFF44FF88).copy(alpha = 0.7f))
+                            fontSize = 14.sp, color = Color.White.copy(alpha = 0.9f))
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
@@ -4908,6 +4964,40 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
+    fun ScanModeButton(label: String, icon: ImageVector, selected: Boolean, onClick: () -> Unit) {
+        val isDark = isSystemInDarkTheme()
+        val containerColor = if (selected) {
+            if (isDark) Color(0xFF2C2C2C) else Color(0xFFFFFFFF)
+        } else Color.Transparent
+        val contentColor = if (selected) {
+            if (isDark) Color.White else Color(0xFF1A1A1A)
+        } else {
+            if (isDark) Color(0xFF999999) else Color(0xFF666666)
+        }
+        val borderColor = if (selected) {
+            if (isDark) Color(0xFF666666) else Color(0xFF1A1A1A)
+        } else {
+            if (isDark) Color(0xFF444444) else Color(0xFFCCCCCC)
+        }
+        Surface(
+            onClick = onClick,
+            shape = RoundedCornerShape(8.dp),
+            color = containerColor,
+            border = androidx.compose.foundation.BorderStroke(if (selected) 1.5.dp else 1.dp, borderColor),
+            modifier = Modifier.height(36.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Icon(icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(15.dp))
+                Text(label, color = contentColor, fontSize = 13.sp, fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal)
+            }
+        }
+    }
+
+    @Composable
     fun QuickActionButton(label: String, icon: ImageVector, cardColor: Color, textColor: Color, onClick: () -> Unit) {
         Button(
             onClick = onClick,
@@ -5075,7 +5165,7 @@ class MainActivity : ComponentActivity() {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("MAC Address", fontSize = 12.sp, color = subtextColor, letterSpacing = 1.sp)
+                                Text("MAC Address", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp)
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(device.macAddress, fontSize = 16.sp, color = textColor, fontWeight = FontWeight.Medium)
                             }
@@ -5173,7 +5263,7 @@ class MainActivity : ComponentActivity() {
                 val history = signalHistory[device.macAddress] ?: emptyList()
                 if ((signalHistory[device.macAddress]?.size ?: 0) >= 3) {
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text("SIGNAL HISTORY", fontSize = 12.sp, color = subtextColor, letterSpacing = 1.sp)
+                    Text("SIGNAL HISTORY", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp)
                     Spacer(modifier = Modifier.height(8.dp))
                     val graphColor = getDeviceColor(device.type)
                     Canvas(
@@ -5232,7 +5322,7 @@ class MainActivity : ComponentActivity() {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(label, fontSize = 12.sp, color = subtextColor, letterSpacing = 1.sp)
+                    Text(label, fontSize = 11.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp)
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(value, fontSize = 16.sp, color = textColor, fontWeight = FontWeight.Medium)
                 }
