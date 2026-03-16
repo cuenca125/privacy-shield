@@ -15,3 +15,4 @@ build/
 *.aab 
 .DS_Store 
 Thumbs.db
+"PLAYSTORE_LISTING.md" 
