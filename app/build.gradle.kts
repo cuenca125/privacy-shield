@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -35,16 +37,40 @@ android {
         }
     }
 
+    // SECURITY FIX: Load keystore credentials from keystore.properties or environment variables.
+    // Hardcoded fallback passwords removed. Signing is skipped if neither source provides credentials.
     signingConfigs {
         create("release") {
-            val keystorePath = System.getenv("KEYSTORE_PATH") ?: "keystore/release.keystore"
-            val keystoreFile = file(keystorePath)
-            if (keystoreFile.exists()) {
-                storeFile = keystoreFile
-                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "REDACTED"
-                keyAlias = System.getenv("KEY_ALIAS") ?: "privacyshield"
-                keyPassword = System.getenv("KEY_PASSWORD") ?: "REDACTED"
+            val keystorePropsFile = rootProject.file("keystore.properties")
+            val envKeystorePath = System.getenv("KEYSTORE_PATH")
+            val envPassword = System.getenv("KEYSTORE_PASSWORD")
+            val envAlias = System.getenv("KEY_ALIAS")
+            val envKeyPassword = System.getenv("KEY_PASSWORD")
+
+            if (envKeystorePath != null && envPassword != null && envAlias != null && envKeyPassword != null) {
+                // CI/CD path: all credentials from environment variables
+                val keystoreFile = file(envKeystorePath)
+                if (keystoreFile.exists()) {
+                    storeFile = keystoreFile
+                    storePassword = envPassword
+                    keyAlias = envAlias
+                    keyPassword = envKeyPassword
+                }
+            } else if (keystorePropsFile.exists()) {
+                // Local development path: credentials from keystore.properties (not committed to VCS)
+                val keystoreProps = Properties().also { props ->
+                    keystorePropsFile.inputStream().use { stream -> props.load(stream) }
+                }
+                val localKeystorePath = keystoreProps.getProperty("storeFile") ?: "keystore/release.keystore"
+                val keystoreFile = file(localKeystorePath)
+                if (keystoreFile.exists()) {
+                    storeFile = keystoreFile
+                    storePassword = keystoreProps.getProperty("storePassword")
+                    keyAlias = keystoreProps.getProperty("keyAlias")
+                    keyPassword = keystoreProps.getProperty("keyPassword")
+                }
             }
+            // If neither source is available, signing is skipped (unsigned APK produced)
         }
     }
 

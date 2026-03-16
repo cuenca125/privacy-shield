@@ -195,30 +195,82 @@ def capture_traffic_summary(interface: str, duration: int = 5) -> str:
 
 
 def run_custom_script(script: str) -> str:
-    """Execute a custom Python script in a sandboxed context."""
+    """Execute a custom Python script in a sandboxed context.
+
+    SECURITY FIX: Restricted __builtins__ to a safe allowlist — dangerous built-ins
+    (open, __import__, eval, exec, compile, os, subprocess, etc.) are excluded.
+    SECURITY FIX: 30-second thread-based timeout prevents infinite-loop DoS.
+    """
     import sys
     import io
+    import threading
 
-    old_stdout = sys.stdout
-    old_stderr = sys.stderr
-    sys.stdout = io.StringIO()
-    sys.stderr = io.StringIO()
+    # Safe built-ins allowlist — no file I/O, no imports, no subprocess
+    _safe_builtins = {
+        'print': print, 'len': len, 'range': range, 'str': str, 'int': int,
+        'float': float, 'bool': bool, 'list': list, 'dict': dict, 'tuple': tuple,
+        'set': set, 'frozenset': frozenset, 'bytes': bytes, 'bytearray': bytearray,
+        'type': type, 'isinstance': isinstance, 'issubclass': issubclass,
+        'enumerate': enumerate, 'zip': zip, 'map': map, 'filter': filter,
+        'sorted': sorted, 'reversed': reversed, 'sum': sum, 'min': min, 'max': max,
+        'abs': abs, 'round': round, 'pow': pow, 'divmod': divmod,
+        'repr': repr, 'hash': hash, 'id': id, 'hex': hex, 'oct': oct, 'bin': bin,
+        'ord': ord, 'chr': chr, 'format': format, 'getattr': getattr,
+        'hasattr': hasattr, 'setattr': setattr, 'delattr': delattr,
+        'staticmethod': staticmethod, 'classmethod': classmethod, 'property': property,
+        'object': object, 'super': super,
+        'Exception': Exception, 'ValueError': ValueError, 'TypeError': TypeError,
+        'KeyError': KeyError, 'IndexError': IndexError, 'AttributeError': AttributeError,
+        'RuntimeError': RuntimeError, 'StopIteration': StopIteration,
+        'NotImplementedError': NotImplementedError, 'OverflowError': OverflowError,
+        'ZeroDivisionError': ZeroDivisionError, 'IOError': IOError, 'OSError': OSError,
+        'TimeoutError': TimeoutError,
+        'True': True, 'False': False, 'None': None,
+        '__name__': '__main__',
+    }
 
-    try:
-        exec(script, {
-            "__builtins__": __builtins__,
-            "json": json,
-            "socket": __import__("socket"),
-        })
-        output = sys.stdout.getvalue()
-        errors = sys.stderr.getvalue()
-        return json.dumps({"success": True, "output": output, "errors": errors})
-    except Exception as e:
+    captured_output = io.StringIO()
+    captured_errors = io.StringIO()
+    script_exception = [None]
+
+    def _run_in_thread():
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        sys.stdout = captured_output
+        sys.stderr = captured_errors
+        try:
+            exec(script, {  # noqa: S102
+                "__builtins__": _safe_builtins,
+                "json": json,
+                "socket": __import__("socket"),
+            })
+        except Exception as e:
+            script_exception[0] = e
+        finally:
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+
+    TIMEOUT_SECONDS = 30
+    thread = threading.Thread(target=_run_in_thread, daemon=True)
+    thread.start()
+    thread.join(timeout=TIMEOUT_SECONDS)
+
+    if thread.is_alive():
         return json.dumps({
             "success": False,
-            "output": sys.stdout.getvalue(),
-            "errors": str(e)
+            "output": captured_output.getvalue(),
+            "errors": f"Script timed out after {TIMEOUT_SECONDS} seconds"
         })
-    finally:
-        sys.stdout = old_stdout
-        sys.stderr = old_stderr
+
+    if script_exception[0] is not None:
+        return json.dumps({
+            "success": False,
+            "output": captured_output.getvalue(),
+            "errors": str(script_exception[0])
+        })
+
+    return json.dumps({
+        "success": True,
+        "output": captured_output.getvalue(),
+        "errors": captured_errors.getvalue()
+    })

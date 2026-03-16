@@ -181,6 +181,25 @@ data class SecurityFeatureInfo(
     val fullDescription: String
 )
 
+// SECURITY FIX: Validates that a network target is a well-formed IPv4, IPv6, CIDR, or hostname.
+// Prevents arbitrary/malformed strings from being passed to socket APIs or embedded in URLs.
+fun isValidNetworkTarget(input: String): Boolean {
+    val s = input.trim()
+    if (s.isEmpty()) return false
+    // IPv4 (with optional CIDR suffix)
+    val ipv4Cidr = Regex("""^(\d{1,3}\.){3}\d{1,3}(/\d{1,2})?$""")
+    if (ipv4Cidr.matches(s)) {
+        val ipPart = s.substringBefore("/")
+        return ipPart.split(".").all { it.toIntOrNull()?.let { n -> n in 0..255 } == true }
+    }
+    // IPv6
+    val ipv6 = Regex("""^[0-9a-fA-F:]{2,39}$""")
+    if (ipv6.matches(s)) return true
+    // Hostname: labels of alphanumeric + hyphens, separated by dots, max 253 chars
+    val hostname = Regex("""^(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?$""")
+    return hostname.matches(s) && s.length <= 253
+}
+
 fun getCveSeverity(cvss: Double?): Pair<String, Color> = when {
     cvss == null -> "UNKNOWN" to Color(0xFF888888)
     cvss >= 9.0 -> "CRITICAL" to Color(0xFFFF4444)
@@ -1852,14 +1871,18 @@ class MainActivity : ComponentActivity() {
                     return try { conn.inputStream.bufferedReader().readText() } finally { conn.disconnect() }
                 }
 
+                // SECURITY FIX: URL-encode vendor and product before embedding in URL path
+                val encodedVendor = java.net.URLEncoder.encode(vendor, "UTF-8")
+                val encodedProduct = product?.let { java.net.URLEncoder.encode(it, "UTF-8") }
+
                 // Try circl.lu first
                 val circlResults: List<CveResult> = try {
                     val circlJson = withContext(Dispatchers.IO) {
-                        val primaryUrl = if (product != null)
-                            "https://cve.circl.lu/api/search/$vendor/$product"
-                        else "https://cve.circl.lu/api/search/$vendor"
+                        val primaryUrl = if (encodedProduct != null)
+                            "https://cve.circl.lu/api/search/$encodedVendor/$encodedProduct"
+                        else "https://cve.circl.lu/api/search/$encodedVendor"
                         try { fetchUrl(primaryUrl) } catch (e: Exception) {
-                            if (product != null) fetchUrl("https://cve.circl.lu/api/search/$vendor")
+                            if (encodedProduct != null) fetchUrl("https://cve.circl.lu/api/search/$encodedVendor")
                             else throw e
                         }
                     }
@@ -2003,7 +2026,8 @@ class MainActivity : ComponentActivity() {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(
                                 onClick = {
-                                    if (!isPortScanning) {
+                                    // SECURITY FIX: Validate target IP/hostname before scanning
+                                    if (!isPortScanning && isValidNetworkTarget(targetIp)) {
                                         isPortScanning = true
                                         portResults = emptyList()
                                         portScanProgress = 0f
@@ -2041,7 +2065,7 @@ class MainActivity : ComponentActivity() {
                                         scanJob = job
                                     }
                                 },
-                                enabled = !isPortScanning && targetIp.isNotEmpty(),
+                                enabled = !isPortScanning && isValidNetworkTarget(targetIp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0)),
                                 shape = RoundedCornerShape(8.dp)
                             ) { Text("Scan", color = Color.White) }
@@ -2493,7 +2517,8 @@ class MainActivity : ComponentActivity() {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(
                                 onClick = {
-                                    if (!isTracing) {
+                                    // SECURITY FIX: Validate target before connecting
+                                    if (!isTracing && isValidNetworkTarget(traceTarget.trim())) {
                                         isTracing = true
                                         traceResults = emptyList()
                                         val target = traceTarget.trim()
@@ -2531,7 +2556,7 @@ class MainActivity : ComponentActivity() {
                                         traceJob = job
                                     }
                                 },
-                                enabled = !isTracing && traceTarget.isNotEmpty(),
+                                enabled = !isTracing && isValidNetworkTarget(traceTarget.trim()),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0)),
                                 shape = RoundedCornerShape(8.dp)
                             ) { Text("Trace", color = Color.White) }

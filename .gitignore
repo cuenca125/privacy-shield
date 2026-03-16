@@ -5,7 +5,8 @@ SESSION_REPORT.md
 prompt.md 
 replace_radar.ps1 
 gitignore 
-local.properties 
+local.properties
+keystore.properties
 .gradle/ 
 build/ 
 *.keystore 
