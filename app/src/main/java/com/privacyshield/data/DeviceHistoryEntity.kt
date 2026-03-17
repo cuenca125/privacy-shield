@@ -2,7 +2,7 @@ package com.privacyshield.data
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
-import com.privacyshield.DetectedDevice
+import com.privacyshield.model.DetectedDevice
 
 @Entity(tableName = "device_history")
 data class DeviceHistoryEntity(

@@ -10,6 +10,8 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.privacyshield.data.AppDatabase
 import com.privacyshield.data.DeviceHistoryEntity
+import com.privacyshield.model.DetectedDevice
+import com.privacyshield.model.DeviceType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.UUID

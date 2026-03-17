@@ -1,5 +1,8 @@
 package com.privacyshield
 
+import com.privacyshield.model.DetectedDevice
+import com.privacyshield.model.EvilTwinAlert
+
 fun isSamePhysicalRouter(mac1: String, mac2: String, signal1: Int, signal2: Int): Boolean {
     val m1 = mac1.uppercase().replace(":", "")
     val m2 = mac2.uppercase().replace(":", "")
