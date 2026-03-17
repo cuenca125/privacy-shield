@@ -178,6 +178,8 @@ app/src/main/assets/
 Cybersecurity enthusiast · CompTIA Security+ candidate
 
 ---
+## Privacy Policy
+[Privacy Policy](https://blank-0x.github.io/privacy-shield/)
 
 ## License
 
