@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="app/src/main/res/drawable/ic_launcher_foreground.xml" width="100" alt="Privacy Shield Logo"/>
+  <img src="screenshots/ic_launcher-playstore.png" width="100" alt="Privacy Shield Logo"/>
   <h1>Privacy Shield</h1>
   <p>Android security and privacy app for detecting nearby devices, scanning networks, and running advanced security tools.</p>
 
