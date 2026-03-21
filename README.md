@@ -14,9 +14,9 @@
 ## Screenshots
 
 <div align="center">
-  <img src="screenshots/home.png" width="30%" alt="Home Tab"/>
-  <img src="screenshots/tools.png" width="30%" alt="Tools Tab - CVE Lookup"/>
-  <img src="screenshots/security.png" width="30%" alt="Security Tab"/>
+  <img src="screenshots/home.jpg" width="30%" alt="Home Tab"/>
+  <img src="screenshots/tools.jpg" width="30%" alt="Tools Tab - CVE Lookup"/>
+  <img src="screenshots/security.jpg" width="30%" alt="Security Tab"/>
 </div>
 
 ---
