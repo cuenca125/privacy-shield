@@ -215,8 +215,10 @@ def run_custom_script(script: str) -> str:
         'sorted': sorted, 'reversed': reversed, 'sum': sum, 'min': min, 'max': max,
         'abs': abs, 'round': round, 'pow': pow, 'divmod': divmod,
         'repr': repr, 'hash': hash, 'id': id, 'hex': hex, 'oct': oct, 'bin': bin,
-        'ord': ord, 'chr': chr, 'format': format, 'getattr': getattr,
-        'hasattr': hasattr, 'setattr': setattr, 'delattr': delattr,
+        'ord': ord, 'chr': chr, 'format': format,
+        # SECURITY FIX: getattr/setattr/delattr removed — combined with the socket module
+        # in globals, getattr(socket, '__builtins__') could expose the full builtins dict
+        # and allow sandbox escape. Normal dot-notation attribute access is unaffected.
         'staticmethod': staticmethod, 'classmethod': classmethod, 'property': property,
         'object': object, 'super': super,
         'Exception': Exception, 'ValueError': ValueError, 'TypeError': TypeError,

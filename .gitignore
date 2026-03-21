@@ -15,4 +15,6 @@ build/
 *.aab 
 .DS_Store 
 Thumbs.db
-"PLAYSTORE_LISTING.md" 
+"PLAYSTORE_LISTING.md"
+app/src/main/assets/nmap_arm64
+app/src/main/assets/nmap_x86_64

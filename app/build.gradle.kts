@@ -80,10 +80,13 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName("release")
+            ndk { debugSymbolLevel = "NONE" }
         }
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+            // Dev build: enable root features for testing nmap, WPA, ARP, Python tools
+            buildConfigField("boolean", "ENABLE_ROOT_FEATURES", "true")
         }
     }
     packaging {

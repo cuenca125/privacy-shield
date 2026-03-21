@@ -21,11 +21,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.privacyshield.BuildConfig
 import com.privacyshield.PythonBridge
 import com.privacyshield.RootFeatureGate
+import com.privacyshield.model.NmapBinaryManager
 import com.privacyshield.ArpSpoofResult
 import com.privacyshield.ArpScanResult
-import com.privacyshield.DeepScanResult
 import com.privacyshield.EvilTwinProbeResult
 import com.privacyshield.TrafficSummaryResult
 import com.privacyshield.model.AppTheme
@@ -34,6 +35,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 @Composable
 fun SecurityTab(
@@ -241,6 +243,7 @@ fun FeatureLockedSheet(feature: SecurityFeatureInfo, currentTheme: AppTheme, onD
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WpaHandshakeSheet(currentTheme: AppTheme, onDismiss: () -> Unit) {
+    if (!BuildConfig.ENABLE_ROOT_FEATURES) return
     val textColor = if (currentTheme == AppTheme.DARK) Color.White else Color.Black
     val subtextColor = if (currentTheme == AppTheme.DARK) Color(0xFF666666) else Color(0xFF888888)
     var authorized by remember { mutableStateOf(false) }
@@ -291,11 +294,14 @@ fun WpaHandshakeSheet(currentTheme: AppTheme, onDismiss: () -> Unit) {
                     status = "Checking monitor mode..."
                     loading = true
                     scope.launch(Dispatchers.IO) {
-                        val result = PythonBridge.checkMonitorMode(context, interfaceName)
+                        val result = withTimeoutOrNull(60_000L) { PythonBridge.checkMonitorMode(context, interfaceName) }
                         withContext(Dispatchers.Main) {
                             loading = false
-                            status = if (result.isMonitor) "Interface is in monitor mode. Starting capture on channel $channel..."
-                                     else "Monitor mode not detected. Run: airmon-ng start $interfaceName"
+                            status = when {
+                                result == null -> "Operation timed out after 60 seconds"
+                                result.isMonitor -> "Interface is in monitor mode. Starting capture on channel $channel..."
+                                else -> "Monitor mode not detected. Run: airmon-ng start $interfaceName"
+                            }
                         }
                     }
                 },
@@ -348,8 +354,12 @@ fun ActiveEvilTwinSheet(currentTheme: AppTheme, onDismiss: () -> Unit) {
                 onClick = {
                     loading = true; error = null; result = null
                     scope.launch(Dispatchers.IO) {
-                        val r = PythonBridge.probeForEvilTwin(context, targetSsid)
-                        withContext(Dispatchers.Main) { loading = false; result = r; if (!r.success) error = r.error }
+                        val r = withTimeoutOrNull(60_000L) { PythonBridge.probeForEvilTwin(context, targetSsid) }
+                        withContext(Dispatchers.Main) {
+                            loading = false
+                            if (r == null) error = "Operation timed out after 60 seconds"
+                            else { result = r; if (!r.success) error = r.error }
+                        }
                     }
                 },
                 enabled = !loading && targetSsid.isNotBlank(),
@@ -413,7 +423,7 @@ fun NmapDeepScanScreen(currentTheme: AppTheme, onBack: () -> Unit) {
     var target by remember { mutableStateOf(gatewayIp) }
     var selectedProfile by remember { mutableStateOf(0) }
     var loading by remember { mutableStateOf(false) }
-    var result by remember { mutableStateOf<DeepScanResult?>(null) }
+    var resultText by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val profiles = listOf(
@@ -447,10 +457,29 @@ fun NmapDeepScanScreen(currentTheme: AppTheme, onBack: () -> Unit) {
             item {
                 Button(
                     onClick = {
-                        loading = true; error = null; result = null
+                        loading = true; error = null; resultText = ""
                         scope.launch(Dispatchers.IO) {
-                            val r = PythonBridge.runDeepScan(context, target, profiles[selectedProfile].second)
-                            withContext(Dispatchers.Main) { loading = false; result = r; if (!r.success) error = r.error }
+                            if (!com.privacyshield.model.isValidNetworkTarget(target)) {
+                                withContext(Dispatchers.Main) { loading = false; error = "Invalid target — enter a valid IP, CIDR, or hostname" }
+                                return@launch
+                            }
+                            val nmapBin = NmapBinaryManager.getNmapPath(context) ?: run {
+                                withContext(Dispatchers.Main) { loading = false; error = "nmap binary not available" }
+                                return@launch
+                            }
+                            val profileArgs = profiles[selectedProfile].second.split(" ").filter { it.isNotBlank() }
+                            val args = profileArgs + listOf(target)
+                            val output = withTimeoutOrNull(60_000L) {
+                                val process = ProcessBuilder(nmapBin, *args.toTypedArray())
+                                    .redirectErrorStream(true)
+                                    .start()
+                                process.inputStream.bufferedReader().readText().also { process.waitFor() }
+                            }
+                            withContext(Dispatchers.Main) {
+                                loading = false
+                                if (output == null) error = "Scan timed out after 60 seconds"
+                                else resultText = output
+                            }
                         }
                     },
                     enabled = !loading && target.isNotBlank(),
@@ -469,47 +498,23 @@ fun NmapDeepScanScreen(currentTheme: AppTheme, onBack: () -> Unit) {
                     }
                 }
             }
-            result?.takeIf { it.success }?.let { r ->
-                if (r.hosts.isEmpty()) {
-                    item { Text("No hosts found", color = subtextColor, modifier = Modifier.padding(8.dp)) }
-                }
-                items(r.hosts) { host ->
+            if (resultText.isNotEmpty()) {
+                item {
                     Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(12.dp)) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(host.ip, fontWeight = FontWeight.Bold, color = textColor, fontSize = 16.sp)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                if (host.hostname.isNotEmpty()) Text("(${host.hostname})", color = subtextColor, fontSize = 12.sp)
-                            }
-                            if (host.os.isNotEmpty()) {
-                                Text("OS: ${host.os.first().name} — ${host.os.first().accuracy}% match",
-                                    color = Color(0xFF4A9EFF), fontSize = 12.sp)
-                            }
-                            val openPorts = host.ports.filter { it.state == "open" }
-                            if (openPorts.isNotEmpty()) {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                openPorts.forEach { port ->
-                                    Row(modifier = Modifier.padding(vertical = 2.dp)) {
-                                        Text("${port.port}/${port.protocol}", color = Color(0xFF44FF88), fontSize = 12.sp,
-                                            modifier = Modifier.width(90.dp))
-                                        Text("${port.service} ${port.version}".trim().ifEmpty { port.product },
-                                            color = textColor, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                                    }
-                                }
-                            }
-                        }
+                        Text(
+                            text = resultText,
+                            color = textColor,
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier.padding(12.dp)
+                        )
                     }
                 }
                 item {
                     OutlinedButton(
                         onClick = {
-                            val text = r.hosts.joinToString("\n\n") { h ->
-                                "${h.ip}${if (h.hostname.isNotEmpty()) " (${h.hostname})" else ""}\n" +
-                                h.os.firstOrNull()?.let { "OS: ${it.name}\n" }.orEmpty() +
-                                h.ports.filter { it.state == "open" }.joinToString("\n") { "${it.port}: ${it.service} ${it.version}" }
-                            }
                             val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, text)
+                                type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, resultText)
                             }
                             context.startActivity(android.content.Intent.createChooser(intent, "Share Results"))
                         },
@@ -527,6 +532,7 @@ fun NmapDeepScanScreen(currentTheme: AppTheme, onBack: () -> Unit) {
 
 @Composable
 fun ScapyAnalyzerScreen(currentTheme: AppTheme, onBack: () -> Unit) {
+    if (!BuildConfig.ENABLE_ROOT_FEATURES) return
     val bgColor = if (currentTheme == AppTheme.DARK) Color(0xFF000000) else Color(0xFFF5F5F5)
     val cardColor = if (currentTheme == AppTheme.DARK) Color(0xFF1A1A1A) else Color.White
     val textColor = if (currentTheme == AppTheme.DARK) Color.White else Color.Black
@@ -605,10 +611,18 @@ fun ScapyAnalyzerScreen(currentTheme: AppTheme, onBack: () -> Unit) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Button(
                             onClick = {
-                                arpLoading = true; arpError = null; arpResult = null
-                                scope.launch(Dispatchers.IO) {
-                                    val r = PythonBridge.runArpScan(context, arpNetwork)
-                                    withContext(Dispatchers.Main) { arpLoading = false; arpResult = r; if (!r.success) arpError = r.error }
+                                if (!com.privacyshield.model.isValidNetworkTarget(arpNetwork)) {
+                                    arpError = "Invalid network — enter a valid CIDR (e.g. 192.168.1.0/24)"
+                                } else {
+                                    arpLoading = true; arpError = null; arpResult = null
+                                    scope.launch(Dispatchers.IO) {
+                                        val r = withTimeoutOrNull(60_000L) { PythonBridge.runArpScan(context, arpNetwork) }
+                                        withContext(Dispatchers.Main) {
+                                            arpLoading = false
+                                            if (r == null) arpError = "Operation timed out after 60 seconds"
+                                            else { arpResult = r; if (!r.success) arpError = r.error }
+                                        }
+                                    }
                                 }
                             },
                             enabled = !arpLoading && arpNetwork.isNotBlank(),
@@ -655,6 +669,7 @@ fun ScapyAnalyzerScreen(currentTheme: AppTheme, onBack: () -> Unit) {
 
 @Composable
 fun ArpDetectionScreen(currentTheme: AppTheme, onBack: () -> Unit) {
+    if (!BuildConfig.ENABLE_ROOT_FEATURES) return
     val bgColor = if (currentTheme == AppTheme.DARK) Color(0xFF000000) else Color(0xFFF5F5F5)
     val cardColor = if (currentTheme == AppTheme.DARK) Color(0xFF1A1A1A) else Color.White
     val textColor = if (currentTheme == AppTheme.DARK) Color.White else Color.Black
@@ -667,7 +682,10 @@ fun ArpDetectionScreen(currentTheme: AppTheme, onBack: () -> Unit) {
     LaunchedEffect(monitoring) {
         if (monitoring) {
             while (monitoring) {
-                val r = withContext(Dispatchers.IO) { PythonBridge.detectArpSpoofing(context, interfaceName, 5) }
+                val r = withContext(Dispatchers.IO) {
+                    withTimeoutOrNull(30_000L) { PythonBridge.detectArpSpoofing(context, interfaceName, 5) }
+                }
+                if (r == null) { error = "Operation timed out after 30 seconds"; monitoring = false; break }
                 result = r
                 if (!r.success) { error = r.error; monitoring = false; break }
                 delay(2000)
@@ -752,6 +770,7 @@ fun ArpDetectionScreen(currentTheme: AppTheme, onBack: () -> Unit) {
 
 @Composable
 fun TrafficMonitorScreen(currentTheme: AppTheme, onBack: () -> Unit) {
+    if (!BuildConfig.ENABLE_ROOT_FEATURES) return
     val bgColor = if (currentTheme == AppTheme.DARK) Color(0xFF000000) else Color(0xFFF5F5F5)
     val cardColor = if (currentTheme == AppTheme.DARK) Color(0xFF1A1A1A) else Color.White
     val textColor = if (currentTheme == AppTheme.DARK) Color.White else Color.Black
@@ -764,7 +783,10 @@ fun TrafficMonitorScreen(currentTheme: AppTheme, onBack: () -> Unit) {
     LaunchedEffect(monitoring) {
         if (monitoring) {
             while (monitoring) {
-                val r = withContext(Dispatchers.IO) { PythonBridge.captureTrafficSummary(context, interfaceName, 2) }
+                val r = withContext(Dispatchers.IO) {
+                    withTimeoutOrNull(30_000L) { PythonBridge.captureTrafficSummary(context, interfaceName, 2) }
+                }
+                if (r == null) { error = "Operation timed out after 30 seconds"; monitoring = false; break }
                 if (r.success) result = r else { error = r.error; monitoring = false; break }
                 delay(500)
             }
@@ -854,6 +876,7 @@ fun TrafficMonitorScreen(currentTheme: AppTheme, onBack: () -> Unit) {
 
 @Composable
 fun PythonScriptScreen(currentTheme: AppTheme, onBack: () -> Unit) {
+    if (!BuildConfig.ENABLE_ROOT_FEATURES) return
     val bgColor = if (currentTheme == AppTheme.DARK) Color(0xFF000000) else Color(0xFFF5F5F5)
     val cardColor = if (currentTheme == AppTheme.DARK) Color(0xFF1A1A1A) else Color.White
     val textColor = if (currentTheme == AppTheme.DARK) Color.White else Color.Black
@@ -914,10 +937,11 @@ fun PythonScriptScreen(currentTheme: AppTheme, onBack: () -> Unit) {
                         onClick = {
                             running = true; output = ""
                             scope.launch(Dispatchers.IO) {
-                                val r = PythonBridge.runCustomScript(context, script)
+                                val r = withTimeoutOrNull(35_000L) { PythonBridge.runCustomScript(context, script) }
                                 withContext(Dispatchers.Main) {
                                     running = false
-                                    output = buildString {
+                                    output = if (r == null) "[TIMEOUT] Script timed out after 35 seconds"
+                                    else buildString {
                                         if (r.output.isNotEmpty()) append(r.output)
                                         if (r.errors.isNotEmpty()) append("\n[ERROR] ${r.errors}")
                                     }.trim()
